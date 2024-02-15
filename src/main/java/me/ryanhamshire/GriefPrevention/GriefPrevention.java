@@ -18,8 +18,6 @@
 
 package me.ryanhamshire.GriefPrevention;
 
-import com.google.common.cache.Cache;
-import com.google.common.cache.CacheBuilder;
 import com.griefprevention.visualization.BoundaryVisualization;
 import com.griefprevention.visualization.VisualizationType;
 import me.ryanhamshire.GriefPrevention.DataStore.NoTransferException;
@@ -58,7 +56,9 @@ import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import java.util.concurrent.TimeUnit;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -72,7 +72,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.logging.Logger;
 import java.util.regex.Matcher;
@@ -123,7 +122,7 @@ public class GriefPrevention extends JavaPlugin
     public boolean config_claims_raidTriggersRequireBuildTrust;      //whether raids are triggered by a player that doesn't have build permission in that claim
     public int config_claims_maxClaimsPerPlayer;                    //maximum number of claims per player
     public boolean config_claims_villagerTradingRequiresTrust;      //whether trading with a claimed villager requires permission
-
+    public boolean config_claims_respectWorldGuard; 
     public int config_claims_initialBlocks;                            //the number of claim blocks a new player starts with
     public double config_claims_abandonReturnRatio;                 //the portion of claim blocks returned to a player when a claim is abandoned
     public int config_claims_blocksAccruedPerHour_default;            //how many additional blocks players get each hour of play (can be zero) without any special permissions
@@ -590,6 +589,7 @@ public class GriefPrevention extends JavaPlugin
         this.config_claims_allowTrappedInAdminClaims = config.getBoolean("GriefPrevention.Claims.AllowTrappedInAdminClaims", false);
 
         this.config_claims_maxClaimsPerPlayer = config.getInt("GriefPrevention.Claims.MaximumNumberOfClaimsPerPlayer", 0);
+        this.config_claims_respectWorldGuard = config.getBoolean("GriefPrevention.Claims.CreationRequiresWorldGuardBuildPermission", true);
         this.config_claims_villagerTradingRequiresTrust = config.getBoolean("GriefPrevention.Claims.VillagerTradingRequiresPermission", true);
         String accessTrustSlashCommands = config.getString("GriefPrevention.Claims.CommandsRequiringAccessTrust", "/sethome");
         this.config_claims_supplyPlayerManual = config.getBoolean("GriefPrevention.Claims.DeliverManuals", true);
@@ -836,6 +836,7 @@ public class GriefPrevention extends JavaPlugin
         outConfig.set("GriefPrevention.Claims.Expiration.AutomaticNatureRestoration.SurvivalWorlds", this.config_claims_survivalAutoNatureRestoration);
         outConfig.set("GriefPrevention.Claims.AllowTrappedInAdminClaims", this.config_claims_allowTrappedInAdminClaims);
         outConfig.set("GriefPrevention.Claims.MaximumNumberOfClaimsPerPlayer", this.config_claims_maxClaimsPerPlayer);
+        outConfig.set("GriefPrevention.Claims.CreationRequiresWorldGuardBuildPermission", this.config_claims_respectWorldGuard);
         outConfig.set("GriefPrevention.Claims.VillagerTradingRequiresPermission", this.config_claims_villagerTradingRequiresTrust);
         outConfig.set("GriefPrevention.Claims.CommandsRequiringAccessTrust", accessTrustSlashCommands);
         outConfig.set("GriefPrevention.Claims.DeliverManuals", config_claims_supplyPlayerManual);
@@ -3204,31 +3205,31 @@ public class GriefPrevention extends JavaPlugin
 
         return this.getServer().getOfflinePlayer(bestMatchID);
     }
-
     private static final Cache<UUID, String> PLAYER_NAME_CACHE = CacheBuilder.newBuilder().expireAfterAccess(5, TimeUnit.MINUTES).build();
     //helper method to resolve a player name from the player's UUID
     static @NotNull String lookupPlayerName(@Nullable UUID playerID)
     {
         //parameter validation
-        if (playerID == null) return getDefaultName(null);
+    	if (playerID == null) return getDefaultName(null);
 
         //check the cache
-        String cached = PLAYER_NAME_CACHE.getIfPresent(playerID);
+    	String cached = PLAYER_NAME_CACHE.getIfPresent(playerID);
         if (cached != null) return cached;
 
         // If name is not cached, fetch player.
         OfflinePlayer player = GriefPrevention.instance.getServer().getOfflinePlayer(playerID);
         return lookupPlayerName(player);
     }
+    	
 
     static @NotNull String lookupPlayerName(@NotNull AnimalTamer tamer)
     {
-        // If the tamer is not a player, fetch their name directly.
+    	// If the tamer is not a player, fetch their name directly.
         if (!(tamer instanceof OfflinePlayer player))
         {
             String name = tamer.getName();
             if (name != null) return name;
-            // Fall back to tamer's UUID.
+         // Fall back to tamer's UUID.
             return getDefaultName(tamer.getUniqueId());
         }
 
@@ -3239,8 +3240,7 @@ public class GriefPrevention extends JavaPlugin
             PLAYER_NAME_CACHE.put(player.getUniqueId(), name);
             return name;
         }
-
-        // Use cached name if available.
+     // Use cached name if available.
         String name = PLAYER_NAME_CACHE.getIfPresent(player.getUniqueId());
 
         if (name == null)
